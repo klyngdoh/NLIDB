@@ -1,15 +1,91 @@
 import pymysql.cursors
-import nltk
 from nltk.corpus import wordnet
 import datetime
+from contractions import CONTRACTION_MAP
+import nltk
+import re
+import spacy
+
 
 # Connect to the database
 connection = pymysql.connect(host='localhost',
                              user='root',
-                             password='admin',
+                             password='',
                              db='nlp',
                              charset='utf8mb4',
                              cursorclass=pymysql.cursors.DictCursor)
+
+print("Initializing...")
+stopword_list = nltk.corpus.stopwords.words('english')
+stopword_list.remove('no')
+stopword_list.remove('not')
+stopword_list.remove('when')
+stopword_list.remove('where')
+stopword_list.remove('how')
+nlp = spacy.load('en_core_web_md', parse=True, tag=True, entity=True)
+
+
+def lemmatize_text(text):
+    # Lemmatize the whole text
+    text = nlp(text)
+    text = ' '.join([word.lemma_ if word.lemma_ != '-PRON-' else word.text for word in text])
+    return text
+
+
+def remove_stopwords(text, is_lower_case=False):
+    # Remove stop words like a, an, the, etc.
+    tokens = nltk.word_tokenize(text)
+    tokens = [token.strip() for token in tokens]
+    if is_lower_case:
+        filtered_tokens = [token for token in tokens if token not in stopword_list]
+    else:
+        filtered_tokens = [token for token in tokens if token.lower() not in stopword_list]
+    filtered_text = ' '.join(filtered_tokens)
+    return filtered_text
+
+
+def expand_contractions(text, contraction_mapping=CONTRACTION_MAP):
+    # Expand words like don't, doesn't, etc. to help with POS tagging
+    contractions_pattern = re.compile('({})'.format('|'.join(contraction_mapping.keys())),
+                                      flags=re.IGNORECASE | re.DOTALL)
+
+    def expand_match(contraction):
+        match = contraction.group(0)
+        first_char = match[0]
+        expanded_contraction = contraction_mapping.get(match) \
+            if contraction_mapping.get(match) \
+            else contraction_mapping.get(match.lower())
+        expanded_contraction = first_char + expanded_contraction[1:]
+        return expanded_contraction
+
+    expanded_text = contractions_pattern.sub(expand_match, text)
+    expanded_text = re.sub("'", "", expanded_text)
+    return expanded_text
+
+
+def simple_stemmer(text):
+    # Convert the word to the Stem word
+    ps = nltk.porter.PorterStemmer()
+    text = ' '.join([ps.stem(word) for word in text.split()])
+    return text
+
+
+def normalize_text(text):
+    # normalize the text
+    doc = expand_contractions(text)
+    # lowercase the text
+    doc = doc.lower()
+    # remove extra newlines
+    doc = re.sub(r'[\r|\n|\r\n]+', ' ', doc)
+    # lemmatize text
+    doc = lemmatize_text(doc)
+    # remove special characters and\or digits
+
+    # remove extra whitespace
+    doc = re.sub(' +', ' ', doc)
+    # remove stopwords
+    doc = remove_stopwords(doc)
+    return doc
 
 
 def get_synonyms(word, pos):
@@ -22,10 +98,11 @@ def get_synonyms(word, pos):
 
 
 def get_select(text):
-    ps = nltk.PorterStemmer()
-    words = text.lower().split()
-    stemmed_words = [ps.stem(word) for word in words]
-    pos_tags = nltk.pos_tag(nltk.word_tokenize(text))
+    normalized_text = normalize_text(text)
+    print("Normalized text = ", normalized_text)
+    words = nltk.word_tokenize(normalized_text)
+    pos_tags = nltk.pos_tag(words)
+
     if words[0] == "when" or "day" in words or "date" in words:
         for ship_syn in get_synonyms('ship', 'v'):
             if ship_syn in text:
@@ -105,7 +182,7 @@ def get_response(select, result):
         return "Your order was placed on " + str(todays_date) + "."
     else:
         if result["arrival_date"] > todays_date:
-            return "Your order will arrive on " + str(todays_date) + "."
+            return "Your order will arrive on " + str(result["arrival_date"]) + "."
         elif result["arrival_date"] < todays_date:
             return "Your order arrived on " + str(todays_date) + "."
         else:
@@ -140,7 +217,6 @@ def main():
             print("\t\"exit\" to exit NLIDB")
 
         else:
-            print("Processing query: \"" + query + "\"")
             select = get_extra_select(get_select(query.lower()), query.lower())
             sql = "select " + select + " from orders where customer_email=%s"
             result = fetchOneResult(sql, user_record["customer_email"])

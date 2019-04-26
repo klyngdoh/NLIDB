@@ -76,6 +76,7 @@ def autocorrect_text(text):
     sent = [spell(word) for word in words]
     return ' '.join(sent)
 
+
 def normalize_text(text):
     # normalize the text
     doc = expand_contractions(text)
@@ -140,7 +141,7 @@ def get_select(text):
     return ""
 
 
-def fetchOneResult(query, params):
+def fetch_one_result(query, params):
     try:
         with connection.cursor() as cursor:
             # Read a single record
@@ -164,15 +165,15 @@ def update_db(query, params):
         return False
 
 
-def fetchUserRecord():
+def fetch_user_record():
     customer_email = input("Please enter your email: ")
-    user_record = fetchOneResult("Select * from orders where customer_email=%s", (customer_email,))
+    user_record = fetch_one_result("Select * from orders where customer_email=%s", (customer_email,))
 
     while user_record is None:
         print("User record not found!")
         customer_email = input("Please enter correct email: ")
 
-        user_record = fetchOneResult("Select * from orders where customer_email=%s", (customer_email,))
+        user_record = fetch_one_result("Select * from orders where customer_email=%s", (customer_email,))
 
     print("Welcome", user_record['customer_first'])
     return user_record
@@ -234,9 +235,9 @@ def get_date(query):
     year = re.search(r'(\s+\d{4}\s*)', query)
     d = date.group(1).strip()
     y = year.group(1).strip()
-    months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+              "November", "December"]
     months_short = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"]
-    date_month = ""
     for month in months:
         if month.lower() in query:
             return y + "-" + ("0" + str(months.index(month) + 1))[0:2] + "-" + d
@@ -250,13 +251,13 @@ def get_date(query):
 def main():
     print("Welcome to NLIDB!")
 
-    user_record = fetchUserRecord()
+    user_record = fetch_user_record()
 
     query = input("Enter your query: ")
     while query != "exit":
 
         if query == "switch user":
-            user_record = fetchUserRecord()
+            user_record = fetch_user_record()
 
         elif query == "help":
             print("The following commands are supported: ")
@@ -266,27 +267,19 @@ def main():
         elif "cancel" in query:
             odate = get_date(query.lower())
             sql = "update orders set status='Canceled' where order_date='" + odate + "' and customer_email=%s"
-            print(sql)
             if update_db(sql, user_record["customer_email"]):
-                print("The requested order has been canceled.")
+                print("Your order placed on " + odate + " has been canceled.")
 
         else:
             select = get_extra_select(get_select(query.lower()), query.lower())
             sql = "select " + select + " from orders where customer_email=%s order by order_date desc"
-            print(sql)
-            result = fetchOneResult(sql, user_record["customer_email"])
+            result = fetch_one_result(sql, user_record["customer_email"])
             response = get_response(select, result)
             print(response)
 
         query = input("Enter your query: ")
 
 
-def debug():
-    print(get_date("cancel my order placed on 20 Apr 2019"))
-    return
-
-
 if __name__ == '__main__':
     main()
-    #debug()
 

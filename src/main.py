@@ -40,11 +40,16 @@ def get_select(text):
         return "order_date"
     elif "status" in words or "where" in words:
         return "status"
-    for word in get_synonyms("price", "n"):
+    price_syns = get_synonyms("price", "n")
+    price_syns.append("amount")
+    price_syns.append("value")
+    price_syns.append("charge")
+    for word in price_syns:
         if word in words:
             return "price"
     if "how much" in text:
         return "price"
+    return ""
 
 
 def fetchOneResult(query, params):
@@ -77,6 +82,16 @@ def get_response(select, result):
     todays_date = datetime.date.today()
     if select == "price":
         return "The price of your order is $" + str(result["price"]) + "."
+    elif "count" in select:
+        if result["count(*)"] == 1:
+            suffix = "s."
+        else:
+            suffix = "."
+        return "You have placed " + str(result["count(*)"]) + " order" + suffix
+    elif "avg" in select:
+        return "Your average order price is $" + str(result["avg(price)"]) + "."
+    elif "sum" in select:
+        return "The total cost of your orders is $" + str(result["sum(price)"]) + "."
     elif select == "status":
         return "Your order is currently " + result["status"].lower() + "."
     elif select == "shipping_date":
@@ -97,15 +112,24 @@ def get_response(select, result):
             return "Your order will arrive today."
 
 
+def get_extra_select(select, query):
+    if "average" in query:
+        return "avg(" + select + ")"
+    elif "how many" in query:
+        return "count(*)"
+    elif "total" in query:
+        return "sum(" + select + ")"
+    else:
+        return select
+
+
 def main():
     print("Welcome to NLIDB!")
 
     user_record = fetchUserRecord()
 
-    query = ""
+    query = input("Enter your query: ")
     while query != "exit":
-        query = input("Enter your query: ")
-        print("Processing query", query)
 
         if query == "switch user":
             user_record = fetchUserRecord()
@@ -116,11 +140,14 @@ def main():
             print("\t\"exit\" to exit NLIDB")
 
         else:
-            select = get_select(query.lower())
+            print("Processing query: \"" + query + "\"")
+            select = get_extra_select(get_select(query.lower()), query.lower())
             sql = "select " + select + " from orders where customer_email=%s"
             result = fetchOneResult(sql, user_record["customer_email"])
             response = get_response(select, result)
             print(response)
+
+        query = input("Enter your query: ")
 
 
 def debug():

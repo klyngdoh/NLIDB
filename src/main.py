@@ -10,7 +10,7 @@ import spacy
 # Connect to the database
 connection = pymysql.connect(host='localhost',
                              user='root',
-                             password='',
+                             password='admin',
                              db='nlp',
                              charset='utf8mb4',
                              cursorclass=pymysql.cursors.DictCursor)
@@ -104,7 +104,10 @@ def get_select(text):
     pos_tags = nltk.pos_tag(words)
 
     if words[0] == "when" or "day" in words or "date" in words:
-        for ship_syn in get_synonyms('ship', 'v'):
+        ship_syns = get_synonyms('ship', 'v')
+        ship_syns.append("dispatched")
+        ship_syns.append("sent")
+        for ship_syn in ship_syns:
             if ship_syn in text:
                 return "shipping_date"
         arrive_syns = get_synonyms("arrive", "v")
@@ -173,9 +176,9 @@ def get_response(select, result):
         return "The price of your order is $" + str(result["price"]) + "."
     elif "count" in select:
         if result["count(*)"] == 1:
-            suffix = "s."
-        else:
             suffix = "."
+        else:
+            suffix = "s."
         return "You have placed " + str(result["count(*)"]) + " order" + suffix
     elif "avg" in select:
         return "Your average order price is $" + str(result["avg(price)"]) + "."
@@ -191,12 +194,12 @@ def get_response(select, result):
         else:
             return "Your order is being shipped today."
     elif select == "order_date":
-        return "Your order was placed on " + str(todays_date) + "."
+        return "Your order was placed on " + str(result["order_date"]) + "."
     else:
         if result["arrival_date"] > todays_date:
             return "Your order will arrive on " + str(result["arrival_date"]) + "."
         elif result["arrival_date"] < todays_date:
-            return "Your order arrived on " + str(todays_date) + "."
+            return "Your order arrived on " + str(result["arrival_date"]) + "."
         else:
             return "Your order will arrive today."
 
@@ -261,7 +264,8 @@ def main():
 
         else:
             select = get_extra_select(get_select(query.lower()), query.lower())
-            sql = "select " + select + " from orders where customer_email=%s"
+            sql = "select " + select + " from orders where customer_email=%s order by order_date desc"
+            print(sql)
             result = fetchOneResult(sql, user_record["customer_email"])
             response = get_response(select, result)
             print(response)

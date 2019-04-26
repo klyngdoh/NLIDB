@@ -137,19 +137,31 @@ def fetchOneResult(query, params):
             cursor.execute(sql, params)
             result = cursor.fetchone()
             return result
-    except:
-        print("An exception occured")
+    except Exception as e:
+        print("An exception occured: " + str(e))
+
+
+def update_db(query, params):
+    try:
+        with connection.cursor() as cursor:
+            sql = query
+            cursor.execute(sql, params)
+            connection.commit()
+            return True
+    except Exception as e:
+        print("An exception occurred: " + str(e))
+        return False
 
 
 def fetchUserRecord():
     customer_email = input("Please enter your email: ")
-    user_record = fetchOneResult("Select * from `orders` where `customer_email`=%s", (customer_email,))
+    user_record = fetchOneResult("Select * from orders where customer_email=%s", (customer_email,))
 
     while user_record is None:
         print("User record not found!")
         customer_email = input("Please enter correct email: ")
 
-        user_record = fetchOneResult("Select * from `orders` where `customer_email`=%s", (customer_email,))
+        user_record = fetchOneResult("Select * from orders where customer_email=%s", (customer_email,))
 
     print("Welcome", user_record['customer_first'])
     return user_record
@@ -173,9 +185,9 @@ def get_response(select, result):
         return "Your order is currently " + result["status"].lower() + "."
     elif select == "shipping_date":
         if result["shipping_date"] > todays_date:
-            return "Your order will be shipped on " + str(todays_date) + "."
+            return "Your order will be shipped on " + str(result["shipping_date"]) + "."
         elif result["shipping_date"] < todays_date:
-            return "Your order was shipped on " + str(todays_date) + "."
+            return "Your order was shipped on " + str(result["shipping_date"]) + "."
         else:
             return "Your order is being shipped today."
     elif select == "order_date":
@@ -200,6 +212,30 @@ def get_extra_select(select, query):
         return select
 
 
+def get_date(query):
+    date_hyphen = (re.search(r'(\d{4}-\d{2}-\d{2})', query))
+    if date_hyphen is not None:
+        return date_hyphen.group(1)
+    date_slash = (re.search(r'(\d{4}/\d{2}/\d{2})', query))
+    if date_slash is not None:
+        return date_slash.group(1)
+    date = re.search(r'(\s+\d{2}\s+)', query)
+    year = re.search(r'(\s+\d{4}\s*)', query)
+    d = date.group(1).strip()
+    y = year.group(1).strip()
+    months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    months_short = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"]
+    date_month = ""
+    for month in months:
+        if month.lower() in query:
+            return y + "-" + ("0" + str(months.index(month) + 1))[0:2] + "-" + d
+
+    for month in months_short:
+        if month.lower() in query:
+            return y + "-" + ("0" + str(months_short.index(month) + 1))[0:2] + "-" + d
+    return ""
+
+
 def main():
     print("Welcome to NLIDB!")
 
@@ -216,6 +252,13 @@ def main():
             print("\t\"switch user\" to switch users")
             print("\t\"exit\" to exit NLIDB")
 
+        elif "cancel" in query:
+            odate = get_date(query.lower())
+            sql = "update orders set status='Canceled' where order_date='" + odate + "' and customer_email=%s"
+            print(sql)
+            if update_db(sql, user_record["customer_email"]):
+                print("The requested order has been canceled.")
+
         else:
             select = get_extra_select(get_select(query.lower()), query.lower())
             sql = "select " + select + " from orders where customer_email=%s"
@@ -227,9 +270,7 @@ def main():
 
 
 def debug():
-    res = get_synonyms("arrive", "v")
-    res.append("reach")
-    print(res)
+    print(get_date("cancel my order placed on 20 Apr 2019"))
     return
 
 

@@ -5,6 +5,7 @@ from contractions import CONTRACTION_MAP
 import nltk
 import re
 import spacy
+from autocorrect import spell
 
 
 # Connect to the database
@@ -70,6 +71,11 @@ def simple_stemmer(text):
     return text
 
 
+def autocorrect_text(text):
+    words = nltk.word_tokenize(text)
+    sent = [spell(word) for word in words]
+    return ' '.join(sent)
+
 def normalize_text(text):
     # normalize the text
     doc = expand_contractions(text)
@@ -77,6 +83,8 @@ def normalize_text(text):
     doc = doc.lower()
     # remove extra newlines
     doc = re.sub(r'[\r|\n|\r\n]+', ' ', doc)
+    # autocorrect simple spelling errors
+    doc = autocorrect_text(doc)
     # lemmatize text
     doc = lemmatize_text(doc)
     # remove special characters and\or digits
@@ -85,6 +93,7 @@ def normalize_text(text):
     doc = re.sub(' +', ' ', doc)
     # remove stopwords
     doc = remove_stopwords(doc)
+
     return doc
 
 
@@ -99,7 +108,6 @@ def get_synonyms(word, pos):
 
 def get_select(text):
     normalized_text = normalize_text(text)
-    print("Normalized text = ", normalized_text)
     words = nltk.word_tokenize(normalized_text)
     pos_tags = nltk.pos_tag(words)
 
